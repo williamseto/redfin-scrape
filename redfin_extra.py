@@ -26,7 +26,7 @@ tax_df = pd.read_csv(tax_csv, header=None)
 # add some more columns
 new_cols = ['parcel',
             'tax_rate',
-            '#units'
+            '#units',
             'price_estimate',
             'rent_estimate']
 
@@ -42,22 +42,30 @@ start_time = time.time()
 for n in range(len(property_df)):
 
     url = property_df.loc[n]['URL']
-    url = 'http://www.redfin.com/CA/Lynwood/3310-Burton-Ave-90262/unit-A/home/7356569'
 
-    listing_id = get_listing_id(url)
+    try:
+        # not for sale anymore?
+        listing_id = get_listing_id(url)
+    except:
+        continue
+
     property_id = url.split("/")[-1]
 
     property_dict = get_property_details(property_id, listing_id)
 
     extra_data = []
 
-    parcel_num = property_dict[u'publicRecordsInfo'][u'basicInfo'][u'apn']
-    extra_data.append(parcel_num)
+    try:
+        # Todo: get parcel_num in a function
+        parcel_num = property_dict[u'publicRecordsInfo'][u'basicInfo'][u'apn']
+        extra_data.append(parcel_num)
 
-    TRA = get_TRA(parcel_num)
-    # now lookup full tax rate using TRA code
-    tax_rate = get_tax(TRA, tax_df)
-    extra_data.append(tax_rate)
+        TRA = get_TRA(parcel_num)
+        # now lookup full tax rate using TRA code
+        tax_rate = get_tax(TRA, tax_df)
+        extra_data.append(tax_rate)
+    except:
+        extra_data = extra_data + ["NA", "NA"]
     
     num_units = get_num_units(property_dict, property_id)
     extra_data.append(num_units)
@@ -66,7 +74,17 @@ for n in range(len(property_df)):
     extra_data.append(price_estimate)
 
     
-    get_rent_estimate(property_dict)
-    exit()
+    rent_estimate = get_rent_estimate(property_dict, property_df.loc[n]['ZIP'])
+    extra_data.append(rent_estimate)
+
+    property_df.loc[n, new_cols] = extra_data
+
+    print n
+    #ToDo: clean up bed/sqft columns
+
+end_time = time.time()
+property_df.to_csv('extra.csv', index = False)
+
+print "total time", end_time - start_time
     
 

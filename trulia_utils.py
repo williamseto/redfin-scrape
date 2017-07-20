@@ -4,7 +4,11 @@
 import numpy as np
 import requests
 import json
+from bs4 import BeautifulSoup
+import gc
 
+# the idea is that we're extremely zoomed in on our target location
+# and trulia api should ideally just return 1 result
 map_zoom = 19
 
 def normalize_coord(val):
@@ -81,7 +85,23 @@ def get_rent_for_location(loc):
     rent_val = resp_dict[u'data'][u'1'][u'pc_median_price_per_bed']
     return rent_val
 
+def get_rent_for_zip(zip_code):
+    base_url = 'https://www.trulia.com/real_estate/'
+    full_url = base_url + str(int(zip_code)) + '-a'
 
+    resp = requests.get(full_url)
+    soup_obj = BeautifulSoup(resp.text, 'lxml')
+
+    rent_txt = str(soup_obj.find('p', text='Median Rent Per Month')\
+                .previous_sibling.previous_sibling.contents[0])
+
+    rent_txt = rent_txt.strip()
+    rent_txt = rent_txt.replace('$', '').replace(',', '')
+
+    # beautifulsoup memory leak?
+    gc.collect()
+
+    return rent_txt
 # example usage
 
 # # lat, lon

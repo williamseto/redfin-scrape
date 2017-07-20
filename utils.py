@@ -4,6 +4,7 @@ import urllib
 import requests
 import json
 import re
+import trulia_utils as trulia
 
 def get_amen_info_from_dict(property_dict, info_str):
     attr_info = None
@@ -16,13 +17,14 @@ def get_amen_info_from_dict(property_dict, info_str):
 
 def get_amen_val_from_info(attr_info, val_str):
     num_val = None
-    for entry in attr_info:
-        try:
-            if entry[u'amenityName'] == val_str:
-                # remove anything not number or decimal
-                num_val = int(re.sub("[^\d\.]", "", entry[u'amenityValues'][0]))
-        except:
-            pass
+    if attr_info:
+        for entry in attr_info:
+            try:
+                if entry[u'amenityName'] == val_str:
+                    # remove anything not number or decimal
+                    num_val = int(re.sub("[^\d\.]", "", entry[u'amenityValues'][0]))
+            except:
+                pass
     return num_val
 
 def get_api_response(query):
@@ -77,16 +79,22 @@ def get_price_estimate(property_id, listing_id):
         estimate = 'NA'
     return estimate
 
-def get_rent_estimate(property_dict):
+def get_rent_estimate(property_dict, zip_code):
 
     # check if the multi unit info has rent info
     multi_unit_info = get_amen_info_from_dict(property_dict, u'Multi-Unit Information')
     gross_income = get_amen_val_from_info(multi_unit_info, u'Gross Income')
 
-    print gross_income
+    avg_rent = None
     # else, query trulia for average rent in zip code
     if gross_income is None:
-        pass
+        avg_rent = trulia.get_rent_for_zip(zip_code)
+    else:
+        # redfin gives in annual
+        avg_rent = gross_income / 12
+
+    return avg_rent
+
 
 def get_num_units(property_dict, property_id):
 
