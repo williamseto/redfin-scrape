@@ -16,7 +16,7 @@ def get_amen_info_from_dict(property_dict, info_str):
     return attr_info
 
 def get_amen_val_from_info(attr_info, val_str):
-    num_val = None
+    num_val = "NA"
     if attr_info:
         for entry in attr_info:
             try:
@@ -66,32 +66,68 @@ def get_property_details(property_id, listing_id):
 
     return resp_dict
 
-def get_price_estimate(property_id, listing_id):
-    base_url = 'http://www.redfin.com/stingray/api/home/details/avm?'
+def get_parcel_num(property_dict):
+
+    parcel_num = "NA"
+    try:
+        parcel_num = property_dict[u'publicRecordsInfo'][u'basicInfo'][u'apn']
+    except:
+        pass
+    # any other possible locations?
+    prop_info = get_amen_info_from_dict(property_dict, u'Property Information')
+    parcel_num = get_amen_val_from_info(prop_info, u'Parcel Number')
+
+    if parcel_num == "NA":
+        parcel_num = get_amen_val_from_info(prop_info, u'Tax Parcel Number')
+
+    return parcel_num
+
+def get_median_price(property_id, listing_id):
+    base_url = 'http://www.redfin.com/stingray/api/home/details/neighborhoodStats/statsInfo?'
     params = {'propertyId' : property_id, 'listingId' : listing_id, 'accessLevel': 1}
     query = base_url + urllib.urlencode(params)
 
     resp_dict = get_api_response(query)
 
+    estimate = 'NA'
     try:
-        estimate = resp_dict[u'predictedValue']
+        estimate = resp_dict[u'primaryRegionInfo'][u'primaryRegionWithStats'][u'listPriceMedian']
     except:
-        estimate = 'NA'
+        pass
+    return estimate
+
+def get_avm_info(property_id, listing_id):
+    base_url = 'http://www.redfin.com/stingray/api/home/details/avm?'
+    params = {'propertyId' : property_id, 'listingId' : listing_id, 'accessLevel': 1}
+    query = base_url + urllib.urlencode(params)
+
+    resp_dict = get_api_response(query)
+    return get_avm_info
+
+def get_price_estimate(property_id, listing_id, avm_dict):
+    try:
+        estimate = avm_dict[u'predictedValue']
+    except:
+        estimate = get_median_price(property_id, listing_id)
     return estimate
 
 def get_rent_estimate(property_dict, zip_code):
 
     # check if the multi unit info has rent info
     multi_unit_info = get_amen_info_from_dict(property_dict, u'Multi-Unit Information')
-    gross_income = get_amen_val_from_info(multi_unit_info, u'Gross Income')
+    gross_income = get_amen_val_from_info(multi_unit_info, u'Gross Scheduled Income')
 
     avg_rent = None
     # else, query trulia for average rent in zip code
-    if gross_income is None:
+    if gross_income == "NA":
         avg_rent = trulia.get_rent_for_zip(zip_code)
     else:
         # redfin gives in annual
-        avg_rent = gross_income / 12
+
+        # hacky since not always same
+        if gross_income > 12000:
+            gross_income = gross_income / 12
+        avg_rent = gross_income
 
     return avg_rent
 
@@ -104,7 +140,7 @@ def get_num_units(property_dict, property_id):
     num_units = get_amen_val_from_info(prop_info, u'Total # of Units')
 
     # try a different query
-    if num_units is None:
+    if num_units == "NA":
         base_url = 'http://www.redfin.com/stingray/api/home/details/belowTheFold?'
         params = {'propertyId' : property_id, 'accessLevel': 1}
         query = base_url + urllib.urlencode(params)
@@ -116,6 +152,42 @@ def get_num_units(property_dict, property_id):
 
     return num_units
 
+def get_num_beds(property_dict, avm_dict):
+
+    # first try public info, then avm
+    num_beds = "NA"
+
+    try:
+        num_beds = property_dict[u'publicRecordsInfo'][u'basicInfo'][u'beds']
+        return num_beds
+    except:
+        pass
+
+    try:
+        num_beds = avm_dict[u'numBeds']
+    except:
+        pass
+
+    return num_beds
+
+def get_sqft(property_dict, avm_dict):
+
+    # first try public info, then avm
+    sqft = "NA"
+
+    try:
+        sqft = property_dict[u'publicRecordsInfo'][u'basicInfo'][u'totalSqFt']
+        return sqft
+    except:
+        pass
+
+    try:
+        sqft = avm_dict[u'sqFt'][u'value']
+    except:
+        pass
+
+    return sqft
+
 
 # gets tax rate area code for computing property tax
 # uses the parcel num and queries la-county
@@ -123,7 +195,7 @@ def get_TRA(parcel_num):
 
     # query LA county for TRA
     c_query = "http://maps.assessor.lacounty.gov/Geocortex/Essentials/REST/sites/PAIS/SQLAINSearch?f=json&AIN="
-    c_query = c_query + parcel_num
+    c_query = c_query + str(parcel_num)
 
     t = requests.get(c_query)
 
